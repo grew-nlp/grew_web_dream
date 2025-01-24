@@ -1,6 +1,6 @@
 (executable
  (public_name grew_web_dream)
  (name main)
- (libraries yojson dream ANSITerminal fileutils conll dep2pictlib grewlib)
+ (libraries yojson dream curly ANSITerminal fileutils conll dep2pictlib grewlib)
  (preprocess (pps lwt_ppx))
 )

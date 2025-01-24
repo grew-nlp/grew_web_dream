@@ -58,6 +58,7 @@ let current_update session_id state_fct =
   match String_map.find_opt session_id !current with
   | None -> error "Unknown id `%s`" session_id
   | Some state -> current := String_map.add session_id (state_fct state) !current
+
 let base_dir session_id = List.fold_left Filename.concat "" [Dream_config.get_string "extern"; "auto"; session_id]
 
 let grs_dir session_id = List.fold_left Filename.concat "" [Dream_config.get_string "extern"; "auto"; session_id; "grs"]
@@ -191,24 +192,119 @@ let upload_grs session_id file =
   current_update session_id (fun state -> { state with grs = Some grs });
   `Assoc [exported_from_grs grs]
 
+let rewrite session_id strat =
+  let state = String_map.find session_id !current in
+  match (state.graph, state.grs) with
+  | (None, _) -> error "No graph selected"
+  | (_, None) -> error "No GRS loaded"
+  | (Some graph, Some grs) ->
+    Grewlib.set_track_history true;
+    let graph_list = Rewrite.simple_rewrite ~config:!current_config.conll graph grs strat in
+    let (log : Yojson.Basic.t) = Rewrite.log_rewrite () in
+    current_update session_id
+      (fun state ->
+         { state with normal_forms = Some graph_list; normal_form=None; history=None; position=None; }
+      );
+    `Assoc [
+      ("normal_forms", `List (List.map (fun g -> `Int (Graph.trace_depth g)) graph_list));
+      ("log", log)
+    ]
 
-(* 
+let select_normal_form session_id position =
+  let state = String_map.find session_id !current in
+  match state.normal_forms with
+  | None -> error "Inconsistent_state [normal_forms]"
+  | Some nfs ->
+    match List.nth_opt nfs (int_of_string position) with
+    | None -> error "Inconsistent_state [position]"
+    | Some graph ->
+      current_update session_id
+        (fun state ->
+           { state with normal_form = Some graph; history=None; position=None; }
+        );
+      graph_save session_id graph
 
-let upload_json_grs session_id json_file =
-  let _tmpfile = Eliom_request_info.get_tmp_filename json_file in
-  let json = Yojson.Basic.from_file _tmpfile in
-  let grs = Grs.of_json ~config:!current_config.conll json in
-  current_update session_id (fun state -> { state with grs = Some grs });
-  `Assoc [exported_from_grs grs]
+let rules session_id =
+  let state = String_map.find session_id !current in
+  match state.normal_form with
+  | None -> error "No selected formal form"
+  | Some graph ->
+    let history = Graph.get_history graph in
+    current_update session_id
+      (fun state ->
+         { state with history = Some history; position=None; }
+      );
+    let rules = List.map (fun (_,(r,l),_,_) -> `List [`String r; `Int l]) history in
+    `List rules
+
+(* return the assoc list of things to (re)draw *)
+let draw_before_after session_id =
+  let state = String_map.find session_id !current in
+  match (state.history, state.position) with
+  | (Some hist, Some pos) ->
+    let ((graph_before, up_deco), (graph_after, down_deco))  =
+      match CCList.drop pos hist with
+      | [] -> error "No such item in history"
+      | [(u,_,d,last)] ->
+        (
+          (last, u),
+          ((match state.normal_form with Some g -> g | None -> error "Bug normal form"), d)
+        )
+      | (u,_,d,x)::(_,_,_,y)::_ -> ((x,u),(y,d)) in
+    [
+      ("before", graph_save ~deco:up_deco session_id graph_before);
+      ("after", graph_save ~deco:down_deco session_id graph_after)
+    ]
+  | _ -> []
+
+let select_rule session_id position =
+  let state = String_map.find session_id !current in
+  match state.history with
+  | None -> error "No history"
+  | Some _ ->
+    current_update session_id (fun state -> { state with position = Some position });
+    `Assoc (draw_before_after session_id)
+
+
+let set_display session_id display =
+  let state = String_map.find session_id !current in
+  current_update session_id
+    (fun state -> { state with display = if display = "graph" then Dot else Dep });
+  `Assoc (
+    draw_before_after session_id
+    |> (fun l -> match state.graph with Some g -> ("init", graph_save session_id g) :: l | None -> l)
+    |> (fun l -> match state.normal_form with Some g -> ("final", graph_save session_id g) :: l | None -> l)
+  )
 
 let upload_grs_code session_id code =
   let grs = Grs.parse ~config:!current_config.conll code in
   current_update session_id (fun state -> { state with grs = Some grs });
   `Assoc [exported_from_grs grs]
 
+
+
+let url_corpus session_id url =
+  let ext = Filename.extension url in
+  match Curly.(run (Request.make ~url ~meth:`GET ())) with
+  | Error _ -> error "Fail to load grs on URL `%s`" url
+  | Ok x ->
+    match x.Curly.Response.code with
+    | 200 ->
+      let data = x.Curly.Response.body in
+      let corpus = Corpus.from_string ~ext ~config:!current_config.conll data in 
+      current_update session_id
+        (fun state ->
+           { state with corpus = Some corpus;
+                        graph=None; normal_forms=None; normal_form=None; history=None; position=None;
+           }
+        );
+      (meta_list_from_corpus corpus)
+    | 404 -> error "URL not found `%s`" url
+    | code -> error "Network error %d on URL `%s`" code url
+
 let url_grs session_id url =
   match Curly.(run (Request.make ~url ~meth:`GET ())) with
-  | Error _ -> raise (Error (sprintf "Fail to load grs on URL `%s`" url))
+  | Error _ -> error "Fail to load grs on URL `%s`" url
   | Ok x ->
     match x.Curly.Response.code with
     | 200 ->
@@ -219,8 +315,46 @@ let url_grs session_id url =
         ("code", `String data);
         exported_from_grs grs
       ]
-    | 404 -> raise (Error (sprintf "URL not found `%s`" url))
-    | code -> raise (Error (sprintf "Network error %d on URL `%s`" code url))
+    | 404 -> error "URL not found `%s`" url
+    | code -> error "Network error %d on URL `%s`" code url
+
+let get_grs session_id =
+  match String_map.find_opt session_id !current with
+  | None -> error "Unknown id `%s`" session_id
+  | Some { grs = None; _ } -> `Null
+  | Some { grs = Some g; _ } -> `Assoc [exported_from_grs g]
+
+let get_corpus session_id =
+  let state = String_map.find session_id !current in
+  match state.corpus with
+  | None -> `Null
+  | Some corpus ->
+    `Assoc [
+      ("meta_list", meta_list_from_corpus corpus);
+      ("warnings", (`List []))
+    ]
+
+let save_normal_form session_id format =
+  let state = String_map.find session_id !current in
+  match (state.normal_form, format) with
+  | (Some nf, "json") ->
+    let json = Graph.to_json nf in
+    let file = sprintf "%s.json" (uid ()) in
+    let filename = Filename.concat (images_dir session_id) file in
+    Yojson.Basic.to_file filename json;
+    `String (Filename.concat (images_url session_id) file)
+  | (Some nf, "conll") ->
+    let conll = nf |> Graph.to_json |> Conll.of_json |> Conll.to_string ~config:!current_config.conll in
+    let file = sprintf "%s.conllu" (uid ()) in
+    let filename = Filename.concat (images_dir session_id) file in
+    CCIO.with_out filename (fun oc -> CCIO.write_line oc conll);
+    `String (Filename.concat (images_url session_id) file)
+  | (None, _) -> error "Inconsistent_state [normal_form]"
+  | (Some _, _) -> error "Unknown format: %s" format
+  
+
+(* 
+
 
 let upload_file session_id path file =
   let _tmpfile = Eliom_request_info.get_tmp_filename file in
@@ -243,103 +377,12 @@ let save file =
   `Assoc [("filename", `String filename); ("size", `String size) ]
 
 
-let url_corpus session_id url =
-  let ext = Filename.extension url in
-  match Curly.(run (Request.make ~url ~meth:`GET ())) with
-  | Error _ -> raise (Error (sprintf "Fail to load grs on URL `%s`" url))
-  | Ok x ->
-    match x.Curly.Response.code with
-    | 200 ->
-      let data = x.Curly.Response.body in
-      let corpus = Corpus.from_string ~ext ~config:!current_config.conll data in 
-      current_update session_id
-        (fun state ->
-           { state with corpus = Some corpus;
-                        graph=None; normal_forms=None; normal_form=None; history=None; position=None;
-           }
-        );
-      (meta_list_from_corpus corpus)
-    | 404 -> raise (Error (sprintf "URL not found `%s`" url))
-    | code -> raise (Error (sprintf "Network error %d on URL `%s`" code url))
-
-let from_data ?conll ?json ?grs () =
-  let session_id = init_session () in
-  begin
-    match conll with
-    | None -> ()
-    | Some c -> 
-      let filename = Filename.concat (images_dir session_id) "corpus.conll" in
-      let out_ch = open_out filename in
-      Printf.fprintf out_ch "%s" c;
-      close_out out_ch;
-  end;
-  begin
-    match json with
-    | None -> ()
-    | Some j -> 
-      let filename = Filename.concat (images_dir session_id) "corpus.json" in
-      let out_ch = open_out filename in
-      Printf.fprintf out_ch "%s" j;
-      close_out out_ch;
-  end;
-  begin
-    match grs with
-    | None -> ()
-    | Some code ->
-        let grs = Grs.parse ~config:!current_config.conll code in
-        current_update session_id (fun state -> { state with grs = Some grs })
-  end;
-  `Assoc [("session_id", `String session_id)]
-
-let get_grs session_id =
-  match String_map.find_opt session_id !current with
-  | None -> raise (Error (sprintf "Unknown id `%s`" session_id))
-  | Some { grs = None } -> `Null
-  | Some { grs = Some g } -> `Assoc [exported_from_grs g]
-
-let get_corpus session_id =
-  let state = String_map.find session_id !current in
-  match state.corpus with
-  | None -> `Null
-  | Some corpus ->
-    `Assoc [
-      ("meta_list", meta_list_from_corpus corpus);
-      ("warnings", (`List []))
-    ]
 
 
 
-let rewrite session_id strat =
-  let state = String_map.find session_id !current in
-  match (state.graph, state.grs) with
-  | (None, _) -> raise (Error "No graph selected")
-  | (_, None) -> raise (Error "No GRS loaded")
-  | (Some graph, Some grs) ->
-    Grewlib.set_track_history true;
-    let graph_list = Rewrite.simple_rewrite ~config:!current_config.conll graph grs strat in
-    let (log : Yojson.Basic.t) = Rewrite.log_rewrite () in
-    current_update session_id
-      (fun state ->
-         { state with normal_forms = Some graph_list; normal_form=None; history=None; position=None; }
-      );
-    `Assoc [
-      ("normal_forms", `List (List.map (fun g -> `Int (Graph.trace_depth g)) graph_list));
-      ("log", log)
-    ]
 
-let select_normal_form session_id position =
-  let state = String_map.find session_id !current in
-  match state.normal_forms with
-  | None -> raise (Error "Inconsistent_state [normal_forms]")
-  | Some nfs ->
-    match List.nth_opt nfs (int_of_string position) with
-    | None -> raise (Error "Inconsistent_state [position]")
-    | Some graph ->
-      current_update session_id
-        (fun state ->
-           { state with normal_form = Some graph; history=None; position=None; }
-        );
-      graph_save session_id graph
+
+
 
 let save_normal_form session_id format =
   let state = String_map.find session_id !current in
@@ -360,57 +403,9 @@ let save_normal_form session_id format =
   | (Some nf, f) -> 
     raise (Error ("Unknown format: " ^ format))
 
-let rules session_id =
-  let state = String_map.find session_id !current in
-  match state.normal_form with
-  | None -> raise (Error "No selected formal form")
-  | Some graph ->
-    let history = Graph.get_history graph in
-    current_update session_id
-      (fun state ->
-         { state with history = Some history; position=None; }
-      );
-    let rules = List.map (fun (_,(r,l),_,_) -> `List [`String r; `Int l]) history in
-    `List rules
 
-(* return the assoc list of things to (re)draw *)
-let draw_before_after session_id =
-  let state = String_map.find session_id !current in
-  match (state.history, state.position) with
-  | (Some hist, Some pos) ->
-    let ((graph_before, up_deco), (graph_after, down_deco))  =
-      match CCList.drop pos hist with
-      | [] -> raise (Error "No such item in history")
-      | [(u,_,d,last)] ->
-        (
-          (last, u),
-          ((match state.normal_form with Some g -> g | None -> raise (Error "Bug normal form")), d)
-        )
-      | (u,_,d,x)::(_,_,_,y)::_ -> ((x,u),(y,d)) in
-    [
-      ("before", graph_save ~deco:up_deco session_id graph_before);
-      ("after", graph_save ~deco:down_deco session_id graph_after)
-    ]
-  | _ -> []
 
-let select_rule session_id string_position =
-  let position = int_of_string string_position in
-  let state = String_map.find session_id !current in
-  match state.history with
-  | None -> raise (Error "No history")
-  | Some hist ->
-    current_update session_id (fun state -> { state with position = Some position });
-    `Assoc (draw_before_after session_id)
 
-let set_display session_id display =
-  let state = String_map.find session_id !current in
-  current_update session_id
-    (fun state -> { state with display = if display = "graph" then Dot else Dep });
-  `Assoc (
-    draw_before_after session_id
-    |> (fun l -> match state.graph with Some g -> ("init", graph_save session_id g) :: l | None -> l)
-    |> (fun l -> match state.normal_form with Some g -> ("final", graph_save session_id g) :: l | None -> l)
-  )
 
 
 (* -----------------------------------------------------------------------*)

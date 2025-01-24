@@ -83,6 +83,158 @@ let upload_grs_route =
         reply_error "<upload_grs> received %d files (1 expected)" (List.length l)
     )
 
+let rewrite_route =
+  let open Yojson.Basic.Util in
+  Dream.post "rewrite"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let strat = List.assoc "strat" param |> to_string in
+      let json = wrap (rewrite session_id) strat in
+      Log.info "<rewrite> ==> %s" (report_status json);
+        reply json
+    )
+
+let select_normal_form_route =
+  let open Yojson.Basic.Util in
+  Dream.post "select_normal_form"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let position = List.assoc "position" param |> to_string in
+      let json = wrap (select_normal_form session_id) position in
+      Log.info "<select_normal_form> ==> %s" (report_status json);
+        reply json
+    )
+
+let rules_route =
+  let open Yojson.Basic.Util in
+  Dream.post "rules"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let json = wrap rules session_id in
+      Log.info "<rules> ==> %s" (report_status json);
+        reply json
+    )
+
+let select_rule_route =
+  let open Yojson.Basic.Util in
+  Dream.post "select_rule"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let position = List.assoc "position" param |> to_int in
+      let json = wrap (select_rule session_id) position in
+      Log.info "<select_rule> ==> %s" (report_status json);
+        reply json
+    )
+
+
+let set_display_route =
+  let open Yojson.Basic.Util in
+  Dream.post "set_display"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let display = List.assoc "display" param |> to_string in
+      let json = wrap (set_display session_id) display in
+      Log.info "<set_display> ==> %s" (report_status json);
+        reply json
+    )
+
+let upload_grs_code_route =
+  let open Yojson.Basic.Util in
+  Dream.post "upload_grs_code"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let code = List.assoc "code" param |> to_string in
+      let json = wrap (upload_grs_code session_id) code in
+      Log.info "<upload_grs_code> ==> %s" (report_status json);
+        reply json
+    )
+
+let url_grs_route =
+  let open Yojson.Basic.Util in
+  Dream.post "url_grs"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let url = List.assoc "url" param |> to_string in
+      let json = wrap (url_grs session_id) url in
+      Log.info "<url_grs> ==> %s" (report_status json);
+        reply json
+    )
+
+let url_corpus_route =
+  let open Yojson.Basic.Util in
+  Dream.post "url_corpus"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let url = List.assoc "url" param |> to_string in
+      let json = wrap (url_corpus session_id) url in
+      Log.info "<url_corpus> ==> %s" (report_status json);
+        reply json
+    )
+
+let get_grs_route =
+  let open Yojson.Basic.Util in
+  Dream.post "get_grs"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let json = wrap get_grs session_id in
+      Log.info "<get_grs> ==> %s" (report_status json);
+        reply json
+    )
+
+let get_corpus_route =
+  let open Yojson.Basic.Util in
+  Dream.post "get_corpus"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let json = wrap get_corpus session_id in
+      Log.info "<get_corpus> ==> %s" (report_status json);
+        reply json
+    )
+
+let save_normal_form_route =
+  let open Yojson.Basic.Util in
+  Dream.post "save_normal_form"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let format = List.assoc "format" param |> to_string in
+      let json = wrap (save_normal_form session_id) format in
+      Log.info "<save_normal_form> ==> %s" (report_status json);
+        reply json
+    )
+
 let all_routes = 
   [
     ping_route;
@@ -91,6 +243,17 @@ let all_routes =
     upload_corpus_route;
     select_graph_route;
     upload_grs_route;
+    upload_grs_code_route;
+    rewrite_route;
+    select_normal_form_route;
+    rules_route;
+    select_rule_route;
+    set_display_route;
+    url_grs_route;
+    url_corpus_route;
+    get_grs_route;
+    get_corpus_route;
+    save_normal_form_route;
   ]
 
 
@@ -119,57 +282,6 @@ let _ =
 
 (* 
  
-module Grew_web_back_app =
-  Eliom_registration.App (
-  struct
-    let application_name = "grew_web_back"
-    let global_data_path = None
-  end)
-
-let main_service =
-  Eliom_service.create
-    ~path:(Eliom_service.Path [])
-    ~meth:(Eliom_service.Get Eliom_parameter.unit)
-    ()
-
-  let () =
-    Grew_web_back_app.register
-      ~service:main_service
-      (fun () () ->
-         Lwt.return
-           (Eliom_tools.F.html
-              ~title:"grew_web_back"
-              ~css:[["css";"grew_web_back.css"]]
-              Html.F.(body [
-                  h1 [txt "Welcome from Eliom's distillery!"];
-                ])))
-
-
-
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["set_display"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "display")
-      ))
-    (fun () (session_id, display) ->
-       Log.info "[session_id=%s] <set_display> display=%s" session_id display;
-       let json = wrap (set_display session_id) display in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["upload_corpus"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** file "file")
-      ))
-    (fun () (session_id, file) ->
-       Log.info "[session_id=%s] <upload_corpus>" session_id;
-       let json = wrap (upload_corpus session_id) file in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
 
 let _ = Eliom_registration.String.create
     ~path:(Eliom_service.Path ["upload_file"])
@@ -204,54 +316,6 @@ let _ = Eliom_registration.String.create
     (fun () (session_id, url) ->
        Log.info "[session_id=%s] <url_corpus> url=%s" session_id url;
        let json = wrap (url_corpus session_id) url in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["upload_grs"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** file "file")
-      ))
-    (fun () (session_id, file) ->
-       Log.info "[session_id=%s] <upload_grs>" session_id;
-       let json = wrap (upload_grs session_id) file in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["upload_grs"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** file "json_file")
-      ))
-    (fun () (session_id, json_file) ->
-       Log.info "[session_id=%s] <upload_grs>" session_id;
-       let json = wrap (upload_json_grs session_id) json_file in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["upload_grs_code"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "code")
-      ))
-    (fun () (session_id, code) ->
-       Log.info "[session_id=%s] <upload_grs_code>" session_id;
-       let json = wrap (upload_grs_code session_id) code in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["url_grs"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "url")
-      ))
-    (fun () (session_id, url) ->
-       Log.info "[session_id=%s] <url_grs> url=%s" session_id url;
-       let json = wrap (url_grs session_id) url in
        Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
     )
 
@@ -340,51 +404,4 @@ let _ = Eliom_registration.String.create
        Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
     )
 
-    let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["from_data"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "conll")
-      ))
-    (fun () conll ->
-      Log.info "<from_data> conll=%s" conll;
-      let json = wrap (from_data ~conll) () in
-      Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-    let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["from_data"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "json")
-      ))
-    (fun () json ->
-      Log.info "<from_data> json=%s" json;
-      let json = wrap (from_data ~json) () in
-      Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-    let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["from_data"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "conll" ** string "grs")
-      ))
-    (fun () (conll, grs) ->
-      Log.info "<from_data> conll=%s grs=%s" conll grs;
-      let json = wrap (from_data ~conll ~grs) () in
-      Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-    let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["from_data"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "json" ** string "grs")
-      ))
-    (fun () (json, grs) ->
-      Log.info "<from_data> json=%s grs=%s" json grs;
-      let json = wrap (from_data ~json ~grs) () in
-      Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
  *)
