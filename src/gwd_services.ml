@@ -175,9 +175,6 @@ let select_graph session_id sent_id =
         );
       graph_save session_id graph
 
-
-
-(* 
 (* Returns one `Assoc item with key "strategies" if possible else ("packages" if possible else "rules") *)
 let exported_from_grs grs =
   match Grs.get_strat_list grs with
@@ -190,10 +187,12 @@ let exported_from_grs grs =
   | strats -> ("strategies", `List (List.map (fun x -> `String x) strats))
 
 let upload_grs session_id file =
-  let _tmpfile = Eliom_request_info.get_tmp_filename file in
-  let grs = Grs.load ~config:!current_config.conll _tmpfile in
+  let grs = Grs.load ~config:!current_config.conll file in
   current_update session_id (fun state -> { state with grs = Some grs });
   `Assoc [exported_from_grs grs]
+
+
+(* 
 
 let upload_json_grs session_id json_file =
   let _tmpfile = Eliom_request_info.get_tmp_filename json_file in

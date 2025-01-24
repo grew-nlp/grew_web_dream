@@ -55,7 +55,6 @@ let upload_corpus_route =
         reply_error "<upload_corpus> received %d files (1 expected)" (List.length l)
     )
 
-
 let select_graph_route =
   let open Yojson.Basic.Util in
   Dream.post "select_graph"
@@ -69,6 +68,20 @@ let select_graph_route =
         reply json
     )
 
+let upload_grs_route = 
+  Dream.post "upload_grs"
+    (fun request ->
+      match%lwt stream_request request with
+      | (map,[(filename,tmp_file)]) ->
+        let session_id = String_map.find "session_id" map in
+        let file = Filename.concat (base_dir session_id) filename in
+        FileUtil.mv tmp_file file;
+        let json = wrap (upload_grs session_id) file in
+        (* Log.info "<upload_grs> project_id=[%s] sample_id=[%s] ==> %s" project_id sample_id (report_status json); *)
+        reply json
+      | (_,l) ->
+        reply_error "<upload_grs> received %d files (1 expected)" (List.length l)
+    )
 
 let all_routes = 
   [
@@ -77,6 +90,7 @@ let all_routes =
     connect_route;
     upload_corpus_route;
     select_graph_route;
+    upload_grs_route;
   ]
 
 
