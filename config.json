@@ -1,0 +1,7 @@
+{
+	"port": 8080,
+	"prefix": "gmd",
+	"extern": "/Users/guillaum/github/grew-nlp/grew_web_dream/static/",
+	"base_url": "http://localhost:8080",
+	"log": "/Users/guillaum/github/grew-nlp/grew_web_dream/log"
+}
