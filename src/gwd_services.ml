@@ -1,5 +1,6 @@
 open Dream_utils
 open Printf
+open Dep2pictlib
 open Conll
 open Grewlib
 
@@ -125,6 +126,55 @@ let upload_corpus session_id file =
   ]
 
 
+let dep_save ?deco session_id graph =
+  let dep = Graph.to_dep ~filter:(filter ()) ?deco ~config:!current_config.conll graph in
+  let d2p = Dep2pictlib.from_dep dep in
+  let file = sprintf "%s.svg" (uid ()) in
+  let filename = Filename.concat (images_dir session_id) file in
+  Dep2pictlib.save_svg ~filename d2p;
+  `String (Filename.concat (images_url session_id) file)
+
+let dot_save ?deco session_id graph =
+  let dot = Graph.to_dot ?deco ~config:!current_config.conll graph in
+  let (temp_file_name,out_ch) =
+    Filename.open_temp_file
+      ~mode:[Open_rdonly;Open_wronly;Open_text] "grew_" ".dot" in
+  fprintf out_ch "%s" dot;
+  close_out out_ch;
+  let file = sprintf "%s.svg" (uid ()) in
+  let filename = Filename.concat (images_dir session_id) file in
+  let command = sprintf "dot -Tsvg -o %s %s " filename temp_file_name in
+  match Sys.command command with 
+  | 0 -> `String (Filename.concat (images_url session_id) file)
+  | n -> error "Fail to run (code=%d) command `%s`" n command
+
+
+let graph_save ?deco session_id graph =
+  let state = String_map.find session_id !current in
+  match state.display with
+  | Dep -> dep_save ?deco session_id graph
+  | Dot -> dot_save ?deco session_id graph
+
+
+let select_graph session_id sent_id =
+  let state = String_map.find session_id !current in
+  match state.corpus with
+  | None -> error "No corpus loaded"
+  | Some corpus ->
+    match Corpus.graph_of_sent_id sent_id corpus with
+    | None -> error "No sent_id: %s" sent_id
+    | Some graph -> 
+      (* let data = Conll_corpus.get_data corpus in
+         match CCArray.find_map (fun (id,graph) -> if id=sent_id then Some graph else None) data with
+         | None -> error ("No sent_id" ^ sent_id)
+         | Some Conll ->
+         Graph.of_json (Conll.to_json Conll) in *)
+      current_update session_id
+        (fun state ->
+           { state with graph = Some graph; normal_forms=None; normal_form=None; history=None; position=None; }
+        );
+      graph_save session_id graph
+
 
 
 (* 
@@ -186,34 +236,6 @@ let load_grs session_id grs_file =
   let grs = Grs.load ~config:!current_config.conll (Filename.concat (grs_dir session_id) grs_file) in
   current_update session_id (fun state -> { state with grs = Some grs });
   `Assoc [exported_from_grs grs]
-
-let dep_save ?deco session_id graph =
-  let dep = Graph.to_dep ~filter:(filter ()) ?deco ~config:!current_config.conll graph in
-  let d2p = Dep2pictlib.from_dep dep in
-  let file = sprintf "%s.svg" (uid ()) in
-  let filename = Filename.concat (images_dir session_id) file in
-  Dep2pictlib.save_svg ~filename d2p;
-  `String (Filename.concat (images_url session_id) file)
-
-let dot_save ?deco session_id graph =
-  let dot = Graph.to_dot ?deco ~config:!current_config.conll graph in
-  let (temp_file_name,out_ch) =
-    Filename.open_temp_file
-      ~mode:[Open_rdonly;Open_wronly;Open_text] "grew_" ".dot" in
-  fprintf out_ch "%s" dot;
-  close_out out_ch;
-  let file = sprintf "%s.svg" (uid ()) in
-  let filename = Filename.concat (images_dir session_id) file in
-  let command = sprintf "dot -Tsvg -o %s %s " filename temp_file_name in
-  match Sys.command command with 
-  | 0 -> `String (Filename.concat (images_url session_id) file)
-  | n -> raise (Error (sprintf "Fail to run (code=%d) command `%s`" n command))
-
-let graph_save ?deco session_id graph =
-  let state = String_map.find session_id !current in
-  match state.display with
-  | Dep -> dep_save ?deco session_id graph
-  | Dot -> dot_save ?deco session_id graph
 
 let save file =
   let _tmpfile = Eliom_request_info.get_tmp_filename file in
@@ -287,24 +309,6 @@ let get_corpus session_id =
     ]
 
 
-let select_graph session_id sent_id =
-  let state = String_map.find session_id !current in
-  match state.corpus with
-  | None -> raise (Error "No corpus loaded")
-  | Some corpus ->
-    match Corpus.graph_of_sent_id sent_id corpus with
-    | None -> raise (Error ("No sent_id: " ^ sent_id))
-    | Some graph -> 
-      (* let data = Conll_corpus.get_data corpus in
-         match CCArray.find_map (fun (id,graph) -> if id=sent_id then Some graph else None) data with
-         | None -> raise (Error ("No sent_id" ^ sent_id))
-         | Some Conll ->
-         Graph.of_json (Conll.to_json Conll) in *)
-      current_update session_id
-        (fun state ->
-           { state with graph = Some graph; normal_forms=None; normal_form=None; history=None; position=None; }
-        );
-      graph_save session_id graph
 
 let rewrite session_id strat =
   let state = String_map.find session_id !current in

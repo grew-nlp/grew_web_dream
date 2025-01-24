@@ -26,6 +26,9 @@ let cors_middleware handler req =
 let ping_route =
   Dream.post "ping" (fun _ -> Dream.html ~headers:["Content-Type", "text/plain"] "{}")
 
+let static_route =
+  Dream.get "/**" (Dream.static "static")
+
 let connect_route =
   Dream.post "connect"
     (fun request ->
@@ -52,11 +55,28 @@ let upload_corpus_route =
         reply_error "<upload_corpus> received %d files (1 expected)" (List.length l)
     )
 
+
+let select_graph_route =
+  let open Yojson.Basic.Util in
+  Dream.post "select_graph"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let sent_id = List.assoc "sent_id" param |> to_string in
+      let json = wrap (select_graph session_id) sent_id in
+      Log.info "<select_graph> ==> %s" (report_status json);
+        reply json
+    )
+
+
 let all_routes = 
   [
     ping_route;
+    static_route;
     connect_route;
     upload_corpus_route;
+    select_graph_route;
   ]
 
 
@@ -221,17 +241,6 @@ let _ = Eliom_registration.String.create
        Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
     )
 
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["select_graph"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "sent_id")
-      ))
-    (fun () (session_id, sent_id) ->
-       Log.info "[session_id=%s] <select_graph> sent_id=%s" session_id sent_id;
-       let json = wrap (select_graph session_id) sent_id in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
 
 let _ = Eliom_registration.String.create
     ~path:(Eliom_service.Path ["rewrite"])
