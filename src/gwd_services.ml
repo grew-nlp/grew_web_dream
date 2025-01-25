@@ -353,15 +353,19 @@ let save_normal_form session_id format =
   | (Some _, _) -> error "Unknown format: %s" format
   
 
-(* 
+let split_path path =
+  let rec loop p =
+    match (Filename.dirname p, Filename.basename p) with
+    | (".", _) -> ""
+    | (p1, last) -> Filename.concat (loop p1) last in
+  (loop (Filename.dirname path), Filename.basename path)
 
 
-let upload_file session_id path file =
-  let _tmpfile = Eliom_request_info.get_tmp_filename file in
+let upload_file session_id path tmp_file =
   let (subpath, file) = split_path path in
   let dir = Filename.concat (grs_dir session_id) subpath in
   FileUtil.mkdir ~parent:true dir;
-  let _ = FileUtil.cp [_tmpfile] (Filename.concat dir file) in
+  let _ = FileUtil.cp [tmp_file] (Filename.concat dir file) in
   `Null
 
 let load_grs session_id grs_file =
@@ -370,72 +374,3 @@ let load_grs session_id grs_file =
   current_update session_id (fun state -> { state with grs = Some grs });
   `Assoc [exported_from_grs grs]
 
-let save file =
-  let _tmpfile = Eliom_request_info.get_tmp_filename file in
-  let filename = Eliom_request_info.get_original_filename file in
-  let size = Eliom_request_info.get_filesize file |> Int64.to_string in
-  `Assoc [("filename", `String filename); ("size", `String size) ]
-
-
-
-
-
-
-
-
-
-let save_normal_form session_id format =
-  let state = String_map.find session_id !current in
-  match (state.normal_form, format) with
-  | (None, _) -> raise (Error "Inconsistent_state [normal_form]")
-  | (Some nf, "json") ->
-    let json = Graph.to_json nf in
-    let file = sprintf "%s.json" (uid ()) in
-    let filename = Filename.concat (images_dir session_id) file in
-    Yojson.Basic.to_file filename json;
-    `String (Filename.concat (images_url session_id) file)
-  | (Some nf, "conll") ->
-    let conll = nf |> Graph.to_json |> Conll.of_json |> Conll.to_string ~config:!current_config.conll in
-    let file = sprintf "%s.conllu" (uid ()) in
-    let filename = Filename.concat (images_dir session_id) file in
-    CCIO.with_out filename (fun oc -> CCIO.write_line oc conll);
-    `String (Filename.concat (images_url session_id) file)
-  | (Some nf, f) -> 
-    raise (Error ("Unknown format: " ^ format))
-
-
-
-
-
-
-(* -----------------------------------------------------------------------*)
-(* MAIN *)
-(* -----------------------------------------------------------------------*)
-let _ =
-
-  (* let () = Ocsigen_config.set_maxrequestbodysizeinmemory 1_000_000_000 in *)
-
-  try
-    (* Read config *)
-    let _ =
-      let elements =
-        List.map
-          (fun item ->
-             Ocsigen_extensions.Configuration.element
-               ~name: item
-               ~pcdata: (fun x -> printf " INFO:  ---> set `%s` config parameter to `%s`\n%!" item x; set_global item x)
-               ()
-          )
-          ["log"; "base_url"; "extern"] in
-
-      Ocsigen_extensions.Configuration.process_elements
-        ~in_tag:"eliommodule"
-        ~elements
-        (Eliom_config.get_config ()) in
-
-    Log.init()
-
-  with
-  | Error msg -> printf " ERROR: ================ Starting error: %s ================\n%!" msg; exit 0
-
- *)

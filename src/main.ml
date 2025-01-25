@@ -55,6 +55,23 @@ let upload_corpus_route =
         reply_error "<upload_corpus> received %d files (1 expected)" (List.length l)
     )
 
+
+let upload_file_route = 
+  Dream.post "upload_file"
+    (fun request ->
+      match%lwt stream_request request with
+      | (map,[(_filename,tmp_file)]) ->
+        let session_id = String_map.find "session_id" map in
+        let path = String_map.find "path" map in
+        (* let file = Filename.concat (base_dir session_id) filename in
+        FileUtil.mv tmp_file file; *)
+        let json = wrap (upload_file session_id path) tmp_file in
+        (* Log.info "<upload_file> project_id=[%s] sample_id=[%s] ==> %s" project_id sample_id (report_status json); *)
+        reply json
+      | (_,l) ->
+        reply_error "<upload_file> received %d files (1 expected)" (List.length l)
+    )
+
 let select_graph_route =
   let open Yojson.Basic.Util in
   Dream.post "select_graph"
@@ -81,6 +98,20 @@ let upload_grs_route =
         reply json
       | (_,l) ->
         reply_error "<upload_grs> received %d files (1 expected)" (List.length l)
+    )
+
+let load_grs_route =
+  let open Yojson.Basic.Util in
+  Dream.post "load_grs"
+    (fun request ->
+      let%lwt body = Dream.body request in
+      Printf.printf "===%s===\n%!" body;
+      let param = body |> Yojson.Basic.from_string |> to_assoc in
+      let session_id = List.assoc "session_id" param |> to_string in
+      let grs_file = List.assoc "grs_file" param |> to_string in
+      let json = wrap (load_grs session_id) grs_file in
+      Log.info "<load_grs> ==> %s" (report_status json);
+        reply json
     )
 
 let rewrite_route =
@@ -243,6 +274,8 @@ let all_routes =
     upload_corpus_route;
     select_graph_route;
     upload_grs_route;
+    upload_file_route;
+    load_grs_route;
     upload_grs_code_route;
     rewrite_route;
     select_normal_form_route;
@@ -278,130 +311,3 @@ let _ =
   with Error msg -> 
     (* stop "%s" (Yojson.Basic.pretty_to_string msg) *)
     stop "%s" (Yojson.Basic.pretty_to_string msg)
-
-
-(* 
- 
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["upload_file"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** (string "path" ** file "file"))
-      ))
-    (fun () (session_id, (path, file)) ->
-       Log.info "[session_id=%s] <upload_file> path=%s" session_id path;
-       let json = wrap (upload_file session_id path) file in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["load_grs"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "grs_file")
-      ))
-    (fun () (session_id, grs_file) ->
-       Log.info "[session_id=%s] <load_grs>" session_id;
-       let json = wrap (load_grs session_id) grs_file in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["url_corpus"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "url")
-      ))
-    (fun () (session_id, url) ->
-       Log.info "[session_id=%s] <url_corpus> url=%s" session_id url;
-       let json = wrap (url_corpus session_id) url in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["rewrite"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "strat")
-      ))
-    (fun () (session_id, strat) ->
-       Log.info "[session_id=%s] <rewrite> strat=%s" session_id strat;
-       let json = wrap (rewrite session_id) strat in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["select_normal_form"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "position")
-      ))
-    (fun () (session_id, position) ->
-       Log.info "[session_id=%s] <select_normal_form> position=%s" session_id position;
-       let json = wrap (select_normal_form session_id) position in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["save_normal_form"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "format")
-      ))
-    (fun () (session_id, format) ->
-       Log.info "[session_id=%s] <save_normal_form> format=%s" session_id format;
-       let json = wrap (save_normal_form session_id) format in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["rules"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id")
-      ))
-    (fun () session_id ->
-       Log.info "[session_id=%s] <rules>" session_id;
-       let json = wrap rules session_id in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["select_rule"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id" ** string "position")
-      ))
-    (fun () (session_id, position) ->
-       Log.info "[session_id=%s] <select_rule> position=%s" session_id position;
-       let json = wrap (select_rule session_id) position in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["get_corpus"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id")
-      ))
-    (fun () session_id ->
-       Log.info "[session_id=%s] <get_corpus>" session_id;
-       let json = wrap get_corpus session_id in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
-    let _ = Eliom_registration.String.create
-    ~path:(Eliom_service.Path ["get_grs"])
-    ~meth:(Eliom_service.Post (
-        Eliom_parameter.unit,
-        Eliom_parameter.(string "session_id")
-      ))
-    (fun () session_id ->
-       Log.info "[session_id=%s] <get_grs>" session_id;
-       let json = wrap get_grs session_id in
-       Lwt.return (Yojson.Basic.pretty_to_string json, "text/plain")
-    )
-
- *)
