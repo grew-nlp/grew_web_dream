@@ -5,84 +5,88 @@ open Conll
 open Grewlib
 
 (* ================================================================================================ *)
-type global_config = {
-  conll: Conll_config.t;
-  tf_wf: bool;
-}
 
-let current_config = ref {
-    conll = Conll_config.build "sud";
-    tf_wf = false;
-  }
+let filename_concat_list = List.fold_left Filename.concat "" 
 
-let filter () feature =
-  match feature, !current_config.tf_wf with
-  | ("wordform", false) -> false
-  | ("textform", false) -> false
-  | _ -> true
+let uid () = Unix.gettimeofday () *. 10000. |> int_of_float |> string_of_int
 
 (* ================================================================================================ *)
-type display =
-  | Dep
-  | Dot
+module Session = struct
+  type display = Dep | Dot
 
-type corpus = Corpus.t option
+  type history = (Deco.t * (string * int) * Deco.t * Graph.t) list
 
-type history = (Deco.t * (string * int) * Deco.t * Graph.t) list
+  type t = {
+    conll_config: Conll_config.t;
+    tf_wf: bool;
+    display: display;
+    grs: Grs.t option;
+    corpus: Corpus.t option;
+    graph: Graph.t option;
+    normal_forms: Graph.t list option;
+    normal_form: Graph.t option;
+    history: history option;
+    position: int option;
+  }
 
-type state = {
-  display: display;
-  grs: Grs.t option;
-  corpus: corpus;
-  graph: Graph.t option;
-  normal_forms: Graph.t list option;
-  normal_form: Graph.t option;
-  history: history option;
-  position: int option;
-}
+  let init = {
+    conll_config = Conll_config.build "sud";
+    tf_wf = false;
+    display = Dep;
+    grs = None;
+    corpus = None;
+    graph = None;
+    normal_forms = None;
+    normal_form = None;
+    history = None;
+    position =None;
+  }
 
-let init_state = {
-  display= Dep;
-  grs= None;
-  corpus= None;
-  graph= None;
-  normal_forms= None;
-  normal_form= None;
-  history= None;
-  position=None;
-}
+  let filter session feature =
+    match feature, session.tf_wf with
+    | ("wordform", false) -> false
+    | ("textform", false) -> false
+    | _ -> true
 
-let current = ref String_map.empty
+  let (current : t String_map.t ref) = ref String_map.empty
+  let get session_id =
+    match String_map.find_opt session_id !current with
+    | Some session -> session
+    | None -> error "Unknown id `%s`" session_id
 
-let current_update session_id state_fct =
-  match String_map.find_opt session_id !current with
-  | None -> error "Unknown id `%s`" session_id
-  | Some state -> current := String_map.add session_id (state_fct state) !current
+  let update session_id state_fct =
+    let session = get session_id in
+    current := String_map.add session_id (state_fct session) !current
+  
+  let add session_id =
+    current := String_map.add session_id init !current
+end
 
-let base_dir session_id = List.fold_left Filename.concat "" [Dream_config.get_string "extern"; "auto"; session_id]
+(* ================================================================================================ *)
 
-let grs_dir session_id = List.fold_left Filename.concat "" [Dream_config.get_string "extern"; "auto"; session_id; "grs"]
-let grs_url session_id = List.fold_left Filename.concat "" [Dream_config.get_string "base_url"; "auto"; session_id; "grs"]
+let base_dir session_id = filename_concat_list [Dream_config.get_string "extern"; "auto"; session_id]
 
-let images_dir session_id = List.fold_left Filename.concat "" [Dream_config.get_string "extern"; "auto"; session_id; "images"]
-let images_url session_id = List.fold_left Filename.concat "" [Dream_config.get_string "base_url"; "auto"; session_id; "images"]
+let grs_dir session_id = filename_concat_list [Dream_config.get_string "extern"; "auto"; session_id; "grs"]
+let grs_url session_id = filename_concat_list [Dream_config.get_string "base_url"; "auto"; session_id; "grs"]
 
-let init_session () =
+let images_dir session_id = filename_concat_list [Dream_config.get_string "extern"; "auto"; session_id; "images"]
+let images_url session_id = filename_concat_list [Dream_config.get_string "base_url"; "auto"; session_id; "images"]
+
+let connect () =
   let session_id = sprintf "%04x%04x%04x%04x" (Random.int 0xFFFF) (Random.int 0xFFFF) (Random.int 0xFFFF) (Random.int 0xFFFF) in
-  current := String_map.add session_id init_state !current;
+  Session.add session_id;
   FileUtil.mkdir ~parent:true (images_dir session_id);
-  session_id
+  `String session_id
 
-let connect () = `String (init_session ())
-
-(* TODO: config must be client specific and not shared *)
-let set_config _session_id json_config =
+(* TODO: unused, need an interface for this service *)
+let set_config session_id json_config =
   let open Yojson.Basic.Util in
   try
     let assoc = json_config |> Yojson.Basic.from_string |> to_assoc in
     begin
       match List.assoc_opt "conll_config" assoc with
-      | Some (`String c) -> current_config := {!current_config with conll = Conll_config.build c }
+      | Some (`String c) -> 
+        Session.update session_id (fun session -> {session with conll_config = Conll_config.build c})
       | _ -> ()
     end;
     `Null
@@ -98,11 +102,12 @@ let meta_list_from_corpus corpus =
     ) corpus []
   |> (fun x -> `Assoc x)
 
-let uid () = Unix.gettimeofday () *. 10000. |> int_of_float |> string_of_int
 
 let upload_corpus session_id file =
+  let session = Session.get session_id in
+  let config = session.conll_config in
   let log_file = Filename.concat (base_dir session_id) ((uid ())^".log") in
-  let corpus = Corpus.from_file ~log_file ~config:!current_config.conll file in
+  let corpus = Corpus.from_file ~log_file ~config file in
 
   let warn_list = 
     if Sys.file_exists log_file
@@ -115,10 +120,15 @@ let upload_corpus session_id file =
       end
     else [] in
 
-  current_update session_id
-    (fun state ->
-       { state with corpus = Some corpus;
-                    graph=None; normal_forms=None; normal_form=None; history=None; position=None;
+  Session.update session_id
+    (fun session ->
+      { session with 
+        corpus = Some corpus;
+        graph=None;
+        normal_forms=None;
+        normal_form=None;
+        history=None;
+        position=None;
        }
     );
   `Assoc [
@@ -128,7 +138,10 @@ let upload_corpus session_id file =
 
 
 let dep_save ?deco session_id graph =
-  let dep = Graph.to_dep ~filter:(filter ()) ?deco ~config:!current_config.conll graph in
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  let filter = Session.filter session in
+  let dep = Graph.to_dep ~filter ?deco ~config graph in
   let d2p = Dep2pictlib.from_dep dep in
   let file = sprintf "%s.svg" (uid ()) in
   let filename = Filename.concat (images_dir session_id) file in
@@ -136,7 +149,9 @@ let dep_save ?deco session_id graph =
   `String (Filename.concat (images_url session_id) file)
 
 let dot_save ?deco session_id graph =
-  let dot = Graph.to_dot ?deco ~config:!current_config.conll graph in
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  let dot = Graph.to_dot ?deco ~config graph in
   let (temp_file_name,out_ch) =
     Filename.open_temp_file
       ~mode:[Open_rdonly;Open_wronly;Open_text] "grew_" ".dot" in
@@ -151,28 +166,23 @@ let dot_save ?deco session_id graph =
 
 
 let graph_save ?deco session_id graph =
-  let state = String_map.find session_id !current in
-  match state.display with
+  let session = Session.get session_id in
+  match session.display with
   | Dep -> dep_save ?deco session_id graph
   | Dot -> dot_save ?deco session_id graph
 
 
 let select_graph session_id sent_id =
-  let state = String_map.find session_id !current in
-  match state.corpus with
+  let session = Session.get session_id in
+  match session.corpus with
   | None -> error "No corpus loaded"
   | Some corpus ->
     match Corpus.graph_of_sent_id sent_id corpus with
     | None -> error "No sent_id: %s" sent_id
     | Some graph -> 
-      (* let data = Conll_corpus.get_data corpus in
-         match CCArray.find_map (fun (id,graph) -> if id=sent_id then Some graph else None) data with
-         | None -> error ("No sent_id" ^ sent_id)
-         | Some Conll ->
-         Graph.of_json (Conll.to_json Conll) in *)
-      current_update session_id
-        (fun state ->
-           { state with graph = Some graph; normal_forms=None; normal_form=None; history=None; position=None; }
+      Session.update session_id
+        (fun session ->
+           { session with graph = Some graph; normal_forms=None; normal_form=None; history=None; position=None; }
         );
       graph_save session_id graph
 
@@ -188,22 +198,25 @@ let exported_from_grs grs =
   | strats -> ("strategies", `List (List.map (fun x -> `String x) strats))
 
 let upload_grs session_id file =
-  let grs = Grs.load ~config:!current_config.conll file in
-  current_update session_id (fun state -> { state with grs = Some grs });
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  let grs = Grs.load ~config file in
+  Session.update session_id (fun session -> { session with grs = Some grs });
   `Assoc [exported_from_grs grs]
 
 let rewrite session_id strat =
-  let state = String_map.find session_id !current in
-  match (state.graph, state.grs) with
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  match (session.graph, session.grs) with
   | (None, _) -> error "No graph selected"
   | (_, None) -> error "No GRS loaded"
   | (Some graph, Some grs) ->
     Grewlib.set_track_history true;
-    let graph_list = Rewrite.simple_rewrite ~config:!current_config.conll graph grs strat in
+    let graph_list = Rewrite.simple_rewrite ~config graph grs strat in
     let (log : Yojson.Basic.t) = Rewrite.log_rewrite () in
-    current_update session_id
-      (fun state ->
-         { state with normal_forms = Some graph_list; normal_form=None; history=None; position=None; }
+    Session.update session_id
+      (fun session ->
+         { session with normal_forms = Some graph_list; normal_form=None; history=None; position=None; }
       );
     `Assoc [
       ("normal_forms", `List (List.map (fun g -> `Int (Graph.trace_depth g)) graph_list));
@@ -211,36 +224,36 @@ let rewrite session_id strat =
     ]
 
 let select_normal_form session_id position =
-  let state = String_map.find session_id !current in
-  match state.normal_forms with
+  let session = Session.get session_id in
+  match session.normal_forms with
   | None -> error "Inconsistent_state [normal_forms]"
   | Some nfs ->
     match List.nth_opt nfs (int_of_string position) with
     | None -> error "Inconsistent_state [position]"
     | Some graph ->
-      current_update session_id
-        (fun state ->
-           { state with normal_form = Some graph; history=None; position=None; }
+      Session.update session_id
+        (fun session ->
+           { session with normal_form = Some graph; history=None; position=None; }
         );
       graph_save session_id graph
 
 let rules session_id =
-  let state = String_map.find session_id !current in
-  match state.normal_form with
+  let session = Session.get session_id in
+  match session.normal_form with
   | None -> error "No selected formal form"
   | Some graph ->
     let history = Graph.get_history graph in
-    current_update session_id
-      (fun state ->
-         { state with history = Some history; position=None; }
+    Session.update session_id
+      (fun session ->
+         { session with history = Some history; position=None; }
       );
     let rules = List.map (fun (_,(r,l),_,_) -> `List [`String r; `Int l]) history in
     `List rules
 
 (* return the assoc list of things to (re)draw *)
 let draw_before_after session_id =
-  let state = String_map.find session_id !current in
-  match (state.history, state.position) with
+  let session = Session.get session_id in
+  match (session.history, session.position) with
   | (Some hist, Some pos) ->
     let ((graph_before, up_deco), (graph_after, down_deco))  =
       match CCList.drop pos hist with
@@ -248,7 +261,7 @@ let draw_before_after session_id =
       | [(u,_,d,last)] ->
         (
           (last, u),
-          ((match state.normal_form with Some g -> g | None -> error "Bug normal form"), d)
+          ((match session.normal_form with Some g -> g | None -> error "Bug normal form"), d)
         )
       | (u,_,d,x)::(_,_,_,y)::_ -> ((x,u),(y,d)) in
     [
@@ -258,32 +271,36 @@ let draw_before_after session_id =
   | _ -> []
 
 let select_rule session_id position =
-  let state = String_map.find session_id !current in
-  match state.history with
+  let session = Session.get session_id in
+  match session.history with
   | None -> error "No history"
   | Some _ ->
-    current_update session_id (fun state -> { state with position = Some position });
+    Session.update session_id (fun session -> { session with position = Some position });
     `Assoc (draw_before_after session_id)
 
 
 let set_display session_id display =
-  let state = String_map.find session_id !current in
-  current_update session_id
-    (fun state -> { state with display = if display = "graph" then Dot else Dep });
+  let session = Session.get session_id in
+  Session.update session_id
+    (fun session -> { session with display = if display = "graph" then Dot else Dep });
   `Assoc (
     draw_before_after session_id
-    |> (fun l -> match state.graph with Some g -> ("init", graph_save session_id g) :: l | None -> l)
-    |> (fun l -> match state.normal_form with Some g -> ("final", graph_save session_id g) :: l | None -> l)
+    |> (fun l -> match session.graph with Some g -> ("init", graph_save session_id g) :: l | None -> l)
+    |> (fun l -> match session.normal_form with Some g -> ("final", graph_save session_id g) :: l | None -> l)
   )
 
 let upload_grs_code session_id code =
-  let grs = Grs.parse ~config:!current_config.conll code in
-  current_update session_id (fun state -> { state with grs = Some grs });
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  let grs = Grs.parse ~config code in
+  Session.update session_id (fun session -> { session with grs = Some grs });
   `Assoc [exported_from_grs grs]
 
 
 
 let url_corpus session_id url =
+  let session = Session.get session_id in
+  let config = session.conll_config in
   let ext = Filename.extension url in
   match Curly.(run (Request.make ~url ~meth:`GET ())) with
   | Error _ -> error "Fail to load grs on URL `%s`" url
@@ -291,10 +308,10 @@ let url_corpus session_id url =
     match x.Curly.Response.code with
     | 200 ->
       let data = x.Curly.Response.body in
-      let corpus = Corpus.from_string ~ext ~config:!current_config.conll data in 
-      current_update session_id
-        (fun state ->
-           { state with corpus = Some corpus;
+      let corpus = Corpus.from_string ~ext ~config data in 
+      Session.update session_id
+        (fun session ->
+           { session with corpus = Some corpus;
                         graph=None; normal_forms=None; normal_form=None; history=None; position=None;
            }
         );
@@ -303,14 +320,16 @@ let url_corpus session_id url =
     | code -> error "Network error %d on URL `%s`" code url
 
 let url_grs session_id url =
+  let session = Session.get session_id in
+  let config = session.conll_config in
   match Curly.(run (Request.make ~url ~meth:`GET ())) with
   | Error _ -> error "Fail to load grs on URL `%s`" url
   | Ok x ->
     match x.Curly.Response.code with
     | 200 ->
       let data = x.Curly.Response.body in
-      let grs = Grs.parse ~config:!current_config.conll data in
-      current_update session_id (fun state -> { state with grs = Some grs });
+      let grs = Grs.parse ~config data in
+      Session.update session_id (fun session -> { session with grs = Some grs });
       `Assoc [
         ("code", `String data);
         exported_from_grs grs
@@ -319,14 +338,14 @@ let url_grs session_id url =
     | code -> error "Network error %d on URL `%s`" code url
 
 let get_grs session_id =
-  match String_map.find_opt session_id !current with
-  | None -> error "Unknown id `%s`" session_id
-  | Some { grs = None; _ } -> `Null
-  | Some { grs = Some g; _ } -> `Assoc [exported_from_grs g]
+  let session = Session.get session_id in
+  match session with
+  | { grs = None; _ } -> `Null
+  | { grs = Some g; _ } -> `Assoc [exported_from_grs g]
 
 let get_corpus session_id =
-  let state = String_map.find session_id !current in
-  match state.corpus with
+  let session = Session.get session_id in
+  match session.corpus with
   | None -> `Null
   | Some corpus ->
     `Assoc [
@@ -335,16 +354,19 @@ let get_corpus session_id =
     ]
 
 let save_normal_form session_id format =
-  let state = String_map.find session_id !current in
-  match (state.normal_form, format) with
+  let session = Session.get session_id in
+  let config = session.conll_config in
+  match (session.normal_form, format) with
   | (Some nf, "json") ->
     let json = Graph.to_json nf in
     let file = sprintf "%s.json" (uid ()) in
     let filename = Filename.concat (images_dir session_id) file in
-    Yojson.Basic.to_file filename json;
+    let oc = open_out filename in 
+    Yojson.Basic.pretty_to_channel oc json;
+    close_out oc;
     `String (Filename.concat (images_url session_id) file)
   | (Some nf, "conll") ->
-    let conll = nf |> Graph.to_json |> Conll.of_json |> Conll.to_string ~config:!current_config.conll in
+    let conll = nf |> Graph.to_json |> Conll.of_json |> Conll.to_string ~config in
     let file = sprintf "%s.conllu" (uid ()) in
     let filename = Filename.concat (images_dir session_id) file in
     CCIO.with_out filename (fun oc -> CCIO.write_line oc conll);
@@ -369,8 +391,10 @@ let upload_file session_id path tmp_file =
   `Null
 
 let load_grs session_id grs_file =
+  let session = Session.get session_id in
+  let config = session.conll_config in
   FileUtil.mkdir ~parent:true (grs_dir session_id);
-  let grs = Grs.load ~config:!current_config.conll (Filename.concat (grs_dir session_id) grs_file) in
-  current_update session_id (fun state -> { state with grs = Some grs });
+  let grs = Grs.load ~config (Filename.concat (grs_dir session_id) grs_file) in
+  Session.update session_id (fun session -> { session with grs = Some grs });
   `Assoc [exported_from_grs grs]
 

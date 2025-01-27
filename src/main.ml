@@ -3,7 +3,7 @@ open Dream_utils
 open Gwd_services
 
 
-let _build_option service_name =
+let build_option service_name =
   Dream.options service_name (fun _req ->
     Dream.respond ~headers:[ ("Allow", "OPTIONS, GET, HEAD, POST") ] ""
   )
@@ -268,9 +268,9 @@ let save_normal_form_route =
 
 let all_routes = 
   [
+    build_option "connect"; connect_route;
     ping_route;
     static_route;
-    connect_route;
     upload_corpus_route;
     select_graph_route;
     upload_grs_route;
@@ -296,8 +296,6 @@ let _ =
     let required = ["port"] in
     Dream_config.load ~required ();
     Log.init ?prefix:(Dream_config.get_string_opt "prefix") ();
-    (* let _ = load_data () in
-    let _ = refresh () in *)
 
     Printf.printf "|current|=%d\n%!" (List.length (Dream_config.get_env ()));
     List.iter (fun (x,y) -> Printf.printf "%s --> %s\n%!" x y) (Dream_config.get_env ());
@@ -309,5 +307,4 @@ let _ =
     @@ Dream.logger
     @@ Dream.router all_routes
   with Error msg -> 
-    (* stop "%s" (Yojson.Basic.pretty_to_string msg) *)
     stop "%s" (Yojson.Basic.pretty_to_string msg)
