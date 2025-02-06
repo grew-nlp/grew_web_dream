@@ -105,7 +105,6 @@ let load_grs_route =
   Dream.post "load_grs"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let grs_file = List.assoc "grs_file" param |> to_string in
@@ -119,7 +118,6 @@ let rewrite_route =
   Dream.post "rewrite"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let strat = List.assoc "strat" param |> to_string in
@@ -133,7 +131,6 @@ let select_normal_form_route =
   Dream.post "select_normal_form"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let position = List.assoc "position" param |> to_string in
@@ -147,7 +144,6 @@ let rules_route =
   Dream.post "rules"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let json = wrap rules session_id in
@@ -160,7 +156,6 @@ let select_rule_route =
   Dream.post "select_rule"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let position = List.assoc "position" param |> to_int in
@@ -175,7 +170,6 @@ let set_display_route =
   Dream.post "set_display"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let display = List.assoc "display" param |> to_string in
@@ -189,7 +183,6 @@ let upload_grs_code_route =
   Dream.post "upload_grs_code"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let code = List.assoc "code" param |> to_string in
@@ -203,7 +196,6 @@ let url_grs_route =
   Dream.post "url_grs"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let url = List.assoc "url" param |> to_string in
@@ -217,7 +209,6 @@ let url_corpus_route =
   Dream.post "url_corpus"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let url = List.assoc "url" param |> to_string in
@@ -231,7 +222,6 @@ let get_grs_route =
   Dream.post "get_grs"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let json = wrap get_grs session_id in
@@ -244,7 +234,6 @@ let get_corpus_route =
   Dream.post "get_corpus"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let json = wrap get_corpus session_id in
@@ -257,7 +246,6 @@ let save_normal_form_route =
   Dream.post "save_normal_form"
     (fun request ->
       let%lwt body = Dream.body request in
-      Printf.printf "===%s===\n%!" body;
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
       let format = List.assoc "format" param |> to_string in
