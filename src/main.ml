@@ -269,24 +269,24 @@ let save_normal_form_route =
 let all_routes = 
   [
     build_option "connect"; connect_route;
-    ping_route;
-    static_route;
-    upload_corpus_route;
-    select_graph_route;
-    upload_grs_route;
-    upload_file_route;
-    load_grs_route;
-    upload_grs_code_route;
-    rewrite_route;
-    select_normal_form_route;
-    rules_route;
-    select_rule_route;
-    set_display_route;
-    url_grs_route;
-    url_corpus_route;
-    get_grs_route;
-    get_corpus_route;
-    save_normal_form_route;
+    build_option "ping"; ping_route;
+    build_option "static"; static_route;
+    build_option "upload_corpus"; upload_corpus_route;
+    build_option "select_graph"; select_graph_route;
+    build_option "upload_grs"; upload_grs_route;
+    build_option "upload_file"; upload_file_route;
+    build_option "load_grs"; load_grs_route;
+    build_option "upload_grs_code"; upload_grs_code_route;
+    build_option "rewrite"; rewrite_route;
+    build_option "select_normal_form"; select_normal_form_route;
+    build_option "rules"; rules_route;
+    build_option "select_rule"; select_rule_route;
+    build_option "set_display"; set_display_route;
+    build_option "url_grs"; url_grs_route;
+    build_option "url_corpus"; url_corpus_route;
+    build_option "get_grs"; get_grs_route;
+    build_option "get_corpus"; get_corpus_route;
+    build_option "save_normal_form"; save_normal_form_route;
   ]
 
 
