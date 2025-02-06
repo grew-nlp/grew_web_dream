@@ -1,0 +1,7 @@
+{
+	"port": 13731,
+	"prefix": "gwd",
+	"extern": "/home/guillaum/resources/github.com/grew-nlp/grew_web_dream/static/",
+	"base_url": "https://gwb.grew.fr/",
+	"log": "/home/guillaum/resources/github.com/grew-nlp/grew_web_dream/log"
+}
