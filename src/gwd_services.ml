@@ -228,7 +228,7 @@ let select_normal_form session_id position =
   match session.normal_forms with
   | None -> error "Inconsistent_state [normal_forms]"
   | Some nfs ->
-    match List.nth_opt nfs (int_of_string position) with
+    match List.nth_opt nfs position with
     | None -> error "Inconsistent_state [position]"
     | Some graph ->
       Session.update session_id

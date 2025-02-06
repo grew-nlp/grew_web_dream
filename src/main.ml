@@ -133,7 +133,7 @@ let select_normal_form_route =
       let%lwt body = Dream.body request in
       let param = body |> Yojson.Basic.from_string |> to_assoc in
       let session_id = List.assoc "session_id" param |> to_string in
-      let position = List.assoc "position" param |> to_string in
+      let position = List.assoc "position" param |> to_int in
       let json = wrap (select_normal_form session_id) position in
       Log.info "<select_normal_form> ==> %s" (report_status json);
         reply json
