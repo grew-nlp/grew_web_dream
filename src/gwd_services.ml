@@ -95,12 +95,25 @@ let set_config session_id json_config =
   | Yojson.Json_error _ -> error "`%s` config is not a valid JSON data" json_config
 
 
-let meta_list_from_corpus corpus = 
+let meta_list_from_corpus corpus =
+  let counter =
+    Corpus.fold_right 
+      (fun sent_id _ acc ->
+        let old_count = String_map.find_opt sent_id acc |> CCOption.get_or ~default: 0 in
+        String_map.add sent_id (old_count + 1) acc
+      ) corpus String_map.empty in
+  let amb_counter = String_map.filter (fun _ n -> n > 1) counter in
+  
   Corpus.fold_right 
-    (fun sent_id graph acc -> 
-       (sent_id, `Assoc (List.map (fun (f,v) -> (f, `String v)) (Graph.get_meta_list graph))) :: acc
-    ) corpus []
-  |> (fun x -> `Assoc x)
+    (fun sent_id graph (acc, acc_counter) ->
+      let (new_sent_id, new_acc_counter) =
+        match String_map.find_opt sent_id acc_counter with
+        | None -> (sent_id, acc_counter)
+        | Some i -> (sprintf "%s__%d" sent_id i, String_map.add sent_id (i-1) acc_counter) in
+       (new_sent_id, `Assoc (List.map (fun (f,v) -> (f, `String v)) (Graph.get_meta_list graph))) :: acc,
+       new_acc_counter
+    ) corpus ([], amb_counter)
+  |> (fun (x,_) -> `Assoc x)
 
 
 let upload_corpus session_id file =
