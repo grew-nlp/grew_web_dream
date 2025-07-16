@@ -105,15 +105,27 @@ let meta_list_from_corpus corpus =
   let amb_counter = String_map.filter (fun _ n -> n > 1) counter in
   
   Corpus.fold_right 
-    (fun sent_id graph (acc, acc_counter) ->
+    (fun sent_id graph (acc, acc_counter, acc_graph_list) ->
       let (new_sent_id, new_acc_counter) =
         match String_map.find_opt sent_id acc_counter with
         | None -> (sent_id, acc_counter)
-        | Some i -> (sprintf "%s__%d" sent_id i, String_map.add sent_id (i-1) acc_counter) in
-       (new_sent_id, `Assoc (List.map (fun (f,v) -> (f, `String v)) (Graph.get_meta_list graph))) :: acc,
-       new_acc_counter
-    ) corpus ([], amb_counter)
-  |> (fun (x,_) -> `Assoc x)
+        | Some i -> 
+          let new_sent_id = sprintf "%s__%d" sent_id i in
+          (new_sent_id, String_map.add sent_id (i-1) acc_counter) in
+      let new_graph = Graph.set_meta "sent_id" new_sent_id graph in
+      let new_graph_list = (new_sent_id,new_graph) :: acc_graph_list in
+
+       (
+        new_sent_id, `Assoc (List.map (fun (f,v) -> (f, `String v)) (Graph.get_meta_list new_graph))) :: acc,
+        new_acc_counter,
+        new_graph_list
+    ) corpus ([], amb_counter, [])
+  |> (fun 
+        (x,_, graph_list) ->
+          let ccc = Corpus.from_assoc_list graph_list in
+        (`Assoc x, ccc)
+  
+    )
 
 
 let upload_corpus session_id file =
@@ -133,10 +145,13 @@ let upload_corpus session_id file =
       end
     else [] in
 
+  let (meta_list, new_corpus) = meta_list_from_corpus corpus in
+
+
   Session.update session_id
     (fun session ->
       { session with 
-        corpus = Some corpus;
+        corpus = Some new_corpus;
         graph=None;
         normal_forms=None;
         normal_form=None;
@@ -145,7 +160,7 @@ let upload_corpus session_id file =
        }
     );
   `Assoc [
-    ("meta_list", meta_list_from_corpus corpus);
+    ("meta_list", meta_list);
     ("warnings", (`List warn_list))
   ]
 
@@ -191,7 +206,7 @@ let select_graph session_id sent_id =
   | None -> error "No corpus loaded"
   | Some corpus ->
     match Corpus.graph_of_sent_id sent_id corpus with
-    | None -> error "No sent_id: %s" sent_id
+    | None -> error "No sent_id: >>>%s<<<" sent_id
     | Some graph -> 
       Session.update session_id
         (fun session ->
@@ -321,14 +336,15 @@ let url_corpus session_id url =
     match x.Curly.Response.code with
     | 200 ->
       let data = x.Curly.Response.body in
-      let corpus = Corpus.from_string ~ext ~config data in 
+      let corpus = Corpus.from_string ~ext ~config data in
+      let (meta_list, new_corpus) = meta_list_from_corpus corpus in
       Session.update session_id
         (fun session ->
-           { session with corpus = Some corpus;
+           { session with corpus = Some new_corpus;
                         graph=None; normal_forms=None; normal_form=None; history=None; position=None;
            }
         );
-      (meta_list_from_corpus corpus)
+      meta_list
     | 404 -> error "URL not found `%s`" url
     | code -> error "Network error %d on URL `%s`" code url
 
@@ -362,7 +378,7 @@ let get_corpus session_id =
   | None -> `Null
   | Some corpus ->
     `Assoc [
-      ("meta_list", meta_list_from_corpus corpus);
+      ("meta_list", fst (meta_list_from_corpus corpus));
       ("warnings", (`List []))
     ]
 
